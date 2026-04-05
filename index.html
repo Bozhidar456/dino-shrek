@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Shrek Dino Run</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f7f7f7; /* Цветът на оригинала */
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none; /* Спира скролирането при докосване */
+        }
+        #gameContainer {
+            width: 100%;
+            max-width: 600px;
+            position: relative;
+        }
+        canvas {
+            width: 100%; /* Прави го адаптивен за телефони */
+            height: auto;
+            display: block;
+            background-color: transparent;
+        }
+        #instructions {
+            position: absolute;
+            top: -40px;
+            width: 100%;
+            text-align: center;
+            color: #535353;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="gameContainer">
+        <div id="instructions">Натисни Space или докосни екрана</div>
+        <canvas id="gameCanvas" width="600" height="150"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Зареждане на картинката на Шрек
+        const shrekImg = new Image();
+        shrekImg.src = 'shrek.png'; // Трябва да е в същата папка!
+
+        let score = 0;
+        let isGameOver = false;
+        let frame = 0;
+        let gameSpeed = 6;
+
+        // Настройки на героя
+        const shrek = {
+            x: 50,
+            y: 100,
+            width: 40,
+            height: 44,
+            dy: 0,
+            jumpForce: -10.5,
+            gravity: 0.6,
+            grounded: true
+        };
+
+        let obstacles = [];
+
+        // --- КОНТРОЛИ ---
+        // За компютър (Space / Стрелка нагоре)
+        document.addEventListener("keydown", (e) => {
+            if ((e.code === "Space" || e.code === "ArrowUp")) {
+                handleJump();
+            }
+        });
+
+        // За мобилни телефони (Докосване на екрана)
+        document.addEventListener("touchstart", (e) => {
+            e.preventDefault(); // Спира зуума и скрола на телефона
+            handleJump();
+        }, { passive: false });
+
+        // За мишка
+        document.addEventListener("mousedown", () => {
+            handleJump();
+        });
+
+        function handleJump() {
+            if (shrek.grounded && !isGameOver) {
+                shrek.dy = shrek.jumpForce;
+                shrek.grounded = false;
+            } else if (isGameOver) {
+                resetGame();
+            }
+        }
+
+        function resetGame() {
+            score = 0;
+            gameSpeed = 6;
+            obstacles = [];
+            isGameOver = false;
+            shrek.y = 100;
+            shrek.dy = 0;
+            gameLoop();
+        }
+
+        function update() {
+            if (isGameOver) return;
+
+            // Гравитация
+            shrek.y += shrek.dy;
+            shrek.dy += shrek.gravity;
+
+            // Под на играта (линията)
+            if (shrek.y >= 100) {
+                shrek.y = 100;
+                shrek.grounded = true;
+            }
+
+            // Увеличаване на скоростта с времето (както в оригинала)
+            if (frame % 500 === 0 && gameSpeed < 13) {
+                gameSpeed += 0.5;
+            }
+
+            // Генериране на препятствия (Кактуси)
+            if (frame % 90 === 0 || (frame % 60 === 0 && Math.random() > 0.6)) { 
+                let obsTypes = [
+                    { width: 15, height: 35, yOffset: 109 }, // Малък кактус
+                    { width: 25, height: 45, yOffset: 99 },  // Голям кактус
+                    { width: 45, height: 35, yOffset: 109 }  // Група кактуси
+                ];
+                let type = obsTypes[Math.floor(Math.random() * obsTypes.length)];
+                
+                // Проверка да няма прекалено близки препятствия
+                let spawn = true;
+                if (obstacles.length > 0) {
+                    let lastObs = obstacles[obstacles.length - 1];
+                    if (canvas.width - lastObs.x < 150) spawn = false;
+                }
+
+                if (spawn) {
+                    obstacles.push({
+                        x: canvas.width,
+                        y: type.yOffset,
+                        width: type.width,
+                        height: type.height
+                    });
+                }
+            }
+
+            // Движение и сблъсъци
+            for (let i = 0; i < obstacles.length; i++) {
+                let obs = obstacles[i];
+                obs.x -= gameSpeed;
+
+                // Hitbox сблъсък (с лек толеранс от 5 пиксела, за да не е несправедливо)
+                if (
+                    shrek.x + 5 < obs.x + obs.width &&
+                    shrek.x + shrek.width - 5 > obs.x &&
+                    shrek.y + 5 < obs.y + obs.height &&
+                    shrek.y + shrek.height - 5 > obs.y
+                ) {
+                    isGameOver = true;
+                }
+            }
+
+            // Изчистване на стари препятствия
+            obstacles = obstacles.filter(obs => obs.x + obs.width > 0);
+
+            score += 0.1; // Плавно покачване на резултата
+            frame++;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Рисуване на хоризонталната линия (земята)
+            ctx.fillStyle = "#535353";
+            ctx.fillRect(0, 140, canvas.width, 1);
+
+            // Рисуване на Шрек (Ако картинката е заредена, я рисува, иначе слага квадрат)
+            if (shrekImg.complete && shrekImg.naturalHeight !== 0) {
+                ctx.drawImage(shrekImg, shrek.x, shrek.y, shrek.width, shrek.height);
+            } else {
+                ctx.fillStyle = "green"; // Fallback, ако липсва картинката
+                ctx.fillRect(shrek.x, shrek.y, shrek.width, shrek.height);
+            }
+
+            // Рисуване на препятствията (Като оригиналните сиви кактуси)
+            ctx.fillStyle = "#535353";
+            for (let obs of obstacles) {
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            }
+
+            // Резултат (горе вдясно)
+            ctx.fillStyle = "#535353";
+            ctx.font = "16px 'Courier New'";
+            ctx.textAlign = "right";
+            // Форматира резултата с водещи нули (пр: 00142)
+            let scoreStr = Math.floor(score).toString().padStart(5, '0');
+            ctx.fillText("HI 00000  " + scoreStr, canvas.width - 10, 20);
+
+            // Екран за край на играта (подобен на оригинала)
+            if (isGameOver) {
+                ctx.textAlign = "center";
+                ctx.font = "bold 20px 'Courier New'";
+                ctx.fillText("G A M E   O V E R", canvas.width / 2, canvas.height / 2 - 10);
+                
+                // Рисуване на малък бутон за рестарт
+                ctx.font = "24px Arial";
+                ctx.fillText("🔄", canvas.width / 2, canvas.height / 2 + 25);
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            if (!isGameOver) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Изчакваме картинката да се зареди, за да стартираме (или стартираме веднага, ако липсва)
+        shrekImg.onload = gameLoop;
+        shrekImg.onerror = gameLoop; // Ако няма картинка, стартира пак (с fallback зелен квадрат)
+    </script>
+</body>
+  </html>
+  
